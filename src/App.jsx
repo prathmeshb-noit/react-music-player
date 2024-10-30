@@ -8,6 +8,7 @@ import {
   FaPlay,
   FaPause,
   FaVolumeUp,
+  FaVolumeMute,
 } from "react-icons/fa";
 
 export default function App() {
@@ -17,8 +18,10 @@ export default function App() {
   const [duration, setDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [progressPercentage, setProgressPercentage] = useState(0);
+  const [isMuted, setIsMuted] = useState(false);
   const soundRef = useRef(null);
   const intervalRef = useRef(null);
+  const [isScrubbing, setIsScrubbing] = useState(false);
 
   useEffect(() => {
     soundRef.current = new Howl({
@@ -33,6 +36,10 @@ export default function App() {
         setIsPlaying(false);
         clearInterval(intervalRef.current);
       },
+      onloaderror: (id, error) => {
+        alert(`Error loading audio: ${error}`);
+        console.error("Howl error:", error);
+      },
     });
 
     return () => {
@@ -40,11 +47,13 @@ export default function App() {
       clearInterval(intervalRef.current);
     };
   }, []);
+
   useEffect(() => {
     if (duration) {
       setProgressPercentage((currentTime / duration) * 100);
     }
   }, [currentTime, duration]);
+
   const togglePlay = () => {
     if (isPlaying) {
       soundRef.current.pause();
@@ -75,11 +84,11 @@ export default function App() {
     soundRef.current.rate(rate);
   };
 
-  const togglePlayerVisibility = () => {
-    setIsMinimized(!isMinimized);
+  const toggleMute = () => {
+    const newMutedState = !isMuted;
+    setIsMuted(newMutedState);
+    soundRef.current.volume(newMutedState ? 0 : 1);
   };
-  const [isScrubbing, setIsScrubbing] = useState(false);
-  const [scrubPercentage, setScrubPercentage] = useState(0);
 
   const handleScrubStart = (e) => {
     setIsScrubbing(true);
@@ -92,37 +101,44 @@ export default function App() {
 
   const handleScrubEnd = () => {
     if (isScrubbing) {
-      const newTime = (scrubPercentage / 100) * duration;
-      soundRef.current.seek(newTime);
-      setCurrentTime(newTime);
       setIsScrubbing(false);
     }
   };
 
   const updateScrubPosition = (e) => {
-    const progressBarRect = e.target
-      .closest(".music-player-slider")
-      .getBoundingClientRect();
-    const offsetX = e.clientX - progressBarRect.left;
+    const target = e.target.closest(
+      ".music-player-slider, .music-player-mobile-slider"
+    );
+    const progressBarRect = target.getBoundingClientRect();
+    const offsetX = (e.clientX || e.touches[0].clientX) - progressBarRect.left; // For touch events
     const newScrubPercentage = Math.min(
       Math.max((offsetX / progressBarRect.width) * 100, 0),
       100
     );
-    setScrubPercentage(newScrubPercentage);
-    setCurrentTime((newScrubPercentage / 100) * duration); // Show time as user scrubs
+    const newTime = (newScrubPercentage / 100) * duration;
+
+    // Update currentTime and soundRef
+    setCurrentTime(newTime);
+    soundRef.current.seek(newTime);
   };
+
   useEffect(() => {
     const handleMouseUp = () => {
-      if (isScrubbing) handleScrubEnd();
+      handleScrubEnd();
     };
+
     window.addEventListener("mouseup", handleMouseUp);
     window.addEventListener("mousemove", handleScrubMove);
+    window.addEventListener("touchend", handleMouseUp); // Handle touch end
+    window.addEventListener("touchmove", handleScrubMove); // Handle touch move
 
     return () => {
       window.removeEventListener("mouseup", handleMouseUp);
       window.removeEventListener("mousemove", handleScrubMove);
+      window.removeEventListener("touchend", handleMouseUp); // Cleanup touch end
+      window.removeEventListener("touchmove", handleScrubMove); // Cleanup touch move
     };
-  }, [isScrubbing, scrubPercentage]);
+  }, [isScrubbing]);
 
   return (
     <>
@@ -131,7 +147,22 @@ export default function App() {
           isMinimized ? "minimized" : ""
         }`}
       >
-        {!isMinimized && <div className="music-player-mobile-slider"></div>}
+        {!isMinimized && (
+          <div
+            className="music-player-mobile-slider"
+            onMouseDown={handleScrubStart}
+            onTouchStart={handleScrubStart} // Allow touch support
+          >
+            <span
+              className="music-player-progress"
+              style={{
+                width: `${progressPercentage}%`,
+              }}
+            >
+              <span className="progress-scrubber"></span>
+            </span>
+          </div>
+        )}
         {!isMinimized && (
           <div className="musicPlayerParent w-100 d-flex justify-content-between align-items-center position-relative">
             <div className="music-player-info d-flex">
@@ -174,18 +205,15 @@ export default function App() {
                 </div>
               </div>
               <div
-                className="music-player-time-rail"
+                className="music-player-time-rail music-player-slider"
                 onMouseDown={handleScrubStart}
-                onMouseMove={handleScrubMove}
-                onMouseUp={handleScrubEnd}
+                onTouchStart={handleScrubStart} // Allow touch support
               >
                 <span className="music-player-total music-player-slider">
                   <span
                     className="music-player-progress"
                     style={{
-                      width: `${
-                        isScrubbing ? scrubPercentage : progressPercentage
-                      }%`,
+                      width: `${progressPercentage}%`,
                     }}
                   >
                     <span className="progress-scrubber"></span>
@@ -202,8 +230,15 @@ export default function App() {
                   {formatTime(duration)}
                 </span>
               </div>
-              <div className="player-buttons music-player-audio-button">
-                <FaVolumeUp size={20} />
+              <div
+                className="player-buttons music-player-audio-button"
+                onClick={toggleMute}
+              >
+                {isMuted ? (
+                  <FaVolumeMute size={20} />
+                ) : (
+                  <FaVolumeUp size={20} />
+                )}
               </div>
               <div className="player-buttons music-player-speed-button d-flex flex-column position-relative">
                 <ul className="music-player-speed-change list-unstyled">

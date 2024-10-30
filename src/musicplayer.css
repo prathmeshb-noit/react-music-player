@@ -252,9 +252,18 @@
     position: absolute;
     top: 0%;
     height: 4px;
-    width: 76%;
+    width: 100%;
     z-index: 5;
-    background-image: linear-gradient(to bottom, #ff7a7a, #d90000);
+    background-color: #fff;
+  }
+  .music-player-progress {
+    width: 0%;
+    display: block;
+    background: red;
+    cursor: pointer;
+    height: 4px;
+    position: relative;
+    transition: width 0.1s linear;
   }
   .musicPlayerParent {
     padding: 0 0px;
